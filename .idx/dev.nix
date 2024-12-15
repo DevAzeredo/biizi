@@ -5,10 +5,9 @@
   channel = "stable-24.05"; # or "unstable"
   # Use https://search.nixos.org/packages to find packages
   packages = [
-    pkgs.cargo
-    pkgs.rustc
     pkgs.rustfmt
     pkgs.stdenv.cc
+    pkgs.rustup
   ];
   # Sets environment variables in the workspace
   env = {
