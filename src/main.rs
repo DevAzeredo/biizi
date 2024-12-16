@@ -1,17 +1,29 @@
 use axum::{
-    extract::{connect_info::ConnectInfo, Path, State}, response::IntoResponse, routing::{any, post}, Json, Router
+    extract::{connect_info::ConnectInfo, Path, State}, http::StatusCode, response::IntoResponse, routing::{any, post}, Json, Router
 };
-use std::{net::SocketAddr, path::PathBuf};
+use diesel_async::{pooled_connection::AsyncDieselConnectionManager, AsyncPgConnection};
+use std::{net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio::net::TcpListener;
 use tower_http::{
     services::ServeDir,
     trace::{DefaultMakeSpan, TraceLayer},
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-
+mod infrastructure {
+    pub mod repositories;
+    pub mod schema;
+}
 mod websocket {
     pub mod websocket;
 }
+mod domain {
+    pub mod models;
+}
+mod application {
+    pub mod service;
+}
+use self::domain::models::{Company, Employee, JobOpportunity};
+use self::application::service::Service;
 
 use crate::websocket::websocket::WebSocketManager;
 use axum::extract::ws::Message;
@@ -30,6 +42,7 @@ fn init_tracing() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 }
+
 pub async fn send_message_handler(
     Path(addr): Path<String>,
     State(ws_manager): State<WebSocketManager>,
@@ -43,10 +56,40 @@ pub async fn send_message_handler(
      }
  }
 
+ pub async fn create_employee(
+    State(pool): State<Pool>,
+    Json(employee): Json<Employee>,
+) -> Result<Json<Employee>, (StatusCode, String)> {
+    let mut conn = pool.get().await.map_err(internal_error)?;
+    Service::add_employee(&mut conn, employee).await.unwrap();
+}
+
+pub async fn create_company(
+    State(pool): State<Pool>,
+    Json(company): Json<Company>,
+) -> Result<Json<Company>, (StatusCode, String)>  {
+    let mut conn = pool.get().await.map_err(internal_error)?;
+    Ok(Json(Service::add_company(&mut conn, company).await))
+}
+
+pub async fn create_job(
+    State(conn): State<Arc<AsyncPgConnection>>,
+    Json(job): Json<JobOpportunity>,
+) {
+    Service::add_job_opportunity(&mut conn.lock().await, job)
+        .await
+        .unwrap();
+}
+type Pool = bb8::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>;
 // Configura as rotas
-fn create_router(ws_manager: WebSocketManager) -> Router {
+async fn create_router(ws_manager: WebSocketManager) -> Router {
     // Clona o WebSocketManager para as rotas
     let ws_manager_clone = ws_manager.clone();
+    // bd
+    let db_url = std::env::var("DATABASE_URL").unwrap();
+    let config = AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(db_url);
+    let pool = bb8::Pool::builder().build(config).await.unwrap();
+
 
     Router::new()
         // Rota WebSocket
@@ -58,6 +101,10 @@ fn create_router(ws_manager: WebSocketManager) -> Router {
         )
         // Rota para enviar mensagens
         .route("/send/:addr", post(send_message_handler)).with_state(ws_manager)
+        .route("/employees", post(create_employee))
+        .route("/companies", post(create_company))
+        .route("/jobs", post(create_job))
+        .with_state(pool)
         // Servir arquivos estáticos
         .fallback_service(
             ServeDir::new(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(ASSETS_DIR))
@@ -69,6 +116,13 @@ fn create_router(ws_manager: WebSocketManager) -> Router {
                 .make_span_with(DefaultMakeSpan::default().include_headers(true)),
         )
 }
+fn internal_error<E>(err: E) -> (StatusCode, String)
+where
+    E: std::error::Error,
+{
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+}
+
 
 #[tokio::main]
 async fn main() {
@@ -82,7 +136,7 @@ async fn main() {
     let listener = TcpListener::bind(SERVER_ADDR).await.unwrap();
     tracing::info!("🚀 Server listening on {}", SERVER_ADDR);
 
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
+    axum::serve(listener, app.await.into_make_service_with_connect_info::<SocketAddr>())
         .await
         .unwrap();
 }
