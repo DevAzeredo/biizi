@@ -1,8 +1,8 @@
 use axum::{
-    extract::{connect_info::ConnectInfo, Path, State}, http::StatusCode, response::IntoResponse, routing::{any, post}, Json, Router
+    extract::{connect_info::ConnectInfo, Path, State}, http::StatusCode, response::IntoResponse, routing::{any, get, post}, Json, Router
 };
 use diesel_async::{pooled_connection::AsyncDieselConnectionManager, AsyncPgConnection};
-use std::{net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{net::SocketAddr, path::PathBuf};
 use tokio::net::TcpListener;
 use tower_http::{
     services::ServeDir,
@@ -13,7 +13,7 @@ mod infrastructure {
     pub mod repositories;
     pub mod schema;
 }
-mod websocket {
+mod websocket { 
     pub mod websocket;
 }
 mod domain {
@@ -56,29 +56,32 @@ pub async fn send_message_handler(
      }
  }
 
- pub async fn create_employee(
+  async fn create_employee(
     State(pool): State<Pool>,
     Json(employee): Json<Employee>,
 ) -> Result<Json<Employee>, (StatusCode, String)> {
     let mut conn = pool.get().await.map_err(internal_error)?;
-    Service::add_employee(&mut conn, employee).await.unwrap();
+  let res =   Service::add_employee(&mut conn, employee).await.map_err(internal_error)?;
+ Ok(res)
 }
 
-pub async fn create_company(
+ async fn create_company(
     State(pool): State<Pool>,
     Json(company): Json<Company>,
 ) -> Result<Json<Company>, (StatusCode, String)>  {
     let mut conn = pool.get().await.map_err(internal_error)?;
-    Ok(Json(Service::add_company(&mut conn, company).await))
+    let res = Service::add_company(&mut conn, company).await.map_err(internal_error)?;
+    Ok(res)
 }
 
-pub async fn create_job(
-    State(conn): State<Arc<AsyncPgConnection>>,
+ async fn create_job(
+    State(pool): State<Pool>,
     Json(job): Json<JobOpportunity>,
-) {
-    Service::add_job_opportunity(&mut conn.lock().await, job)
-        .await
-        .unwrap();
+)-> Result<Json<JobOpportunity>, (StatusCode, String)>  {
+    let mut conn = pool.get().await.map_err(internal_error)?;
+   let res = Service::add_job_opportunity(&mut conn, job)
+        .await.map_err(internal_error)?;
+    Ok(res)
 }
 type Pool = bb8::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>;
 // Configura as rotas
@@ -90,12 +93,11 @@ async fn create_router(ws_manager: WebSocketManager) -> Router {
     let config = AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(db_url);
     let pool = bb8::Pool::builder().build(config).await.unwrap();
 
-
     Router::new()
         // Rota WebSocket
         .route(
             "/ws",
-            any(move |ws, user_agent, addr: ConnectInfo<SocketAddr>| {
+            get(move |ws, user_agent, addr: ConnectInfo<SocketAddr>| {
                 ws_manager_clone.clone().ws_handler(ws, user_agent, addr)
             }),
         )

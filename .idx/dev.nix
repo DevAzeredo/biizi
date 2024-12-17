@@ -9,13 +9,12 @@
     pkgs.stdenv.cc
     pkgs.rustup
     pkgs.diesel-cli
-    pkgs.postgresql_15
     pkgs.sudo
   ];
   services.postgres = {
   enable = true;   
   enableTcp = true;
-  package = pkgs.postgresql_15;
+  package = pkgs.postgresql;
 };
   # Sets environment variables in the workspace
   env = {

@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use diesel::prelude::*;
 use crate::infrastructure::schema::*;
-#[derive(Deserialize, Serialize, Queryable, Insertable)]
+
+#[derive(Deserialize, Serialize, Queryable, Insertable,Selectable)]
 #[diesel(table_name = employees)]
 pub struct Employee {
     pub id: i64,
@@ -17,7 +18,7 @@ pub struct Employee {
     pub rating: f64,
 }
 
-#[derive(Deserialize, Serialize, Queryable, Insertable)]
+#[derive(Deserialize, Serialize, Queryable, Insertable,Selectable)]
 #[diesel(table_name = companies)]
 pub struct Company {
     pub id: i64,
@@ -27,7 +28,7 @@ pub struct Company {
     pub logo_url: String,
 }
 
-#[derive(Deserialize, Serialize, Queryable, Insertable)]
+#[derive(Deserialize, Serialize, Queryable, Insertable,Selectable)]
 #[diesel(table_name = job_opportunities)]
 pub struct JobOpportunity {
     pub id: i64,
