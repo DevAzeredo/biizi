@@ -2,7 +2,7 @@ use crate::infrastructure::schema::*;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, Queryable, Selectable, Identifiable)]
+#[derive(Deserialize, Serialize, Queryable, Selectable, Identifiable, AsChangeset)]
 #[diesel(table_name = employees)]
 pub struct Employee {
     pub id: i64,
@@ -33,7 +33,7 @@ pub struct NewEmployee {
     pub rating: f64,
 }
 
-#[derive(Deserialize, Serialize, Queryable, Selectable, Identifiable)]
+#[derive(Deserialize, Serialize, Queryable, Selectable, Identifiable, AsChangeset)]
 #[diesel(table_name = companies)]
 pub struct Company {
     pub id: i64,
@@ -52,7 +52,7 @@ pub struct NewCompany {
     pub logo_url: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Queryable, Selectable, Identifiable)]
+#[derive(Deserialize, Serialize, Queryable, Selectable, Identifiable, Clone, AsChangeset)]
 #[diesel(table_name = users)]
 pub struct User {
     pub id: i64,
@@ -69,10 +69,11 @@ pub struct NewUser {
     pub password: String,
 }
 
-#[derive(Deserialize, Serialize, Queryable, Selectable, Identifiable)]
+#[derive(Deserialize, Serialize, Queryable, Selectable, Identifiable, AsChangeset)]
 #[diesel(table_name = job_opportunities)]
 pub struct JobOpportunity {
     pub id: i64,
+    pub user_id:Option<i64>,
     pub title: String,
     pub description: String,
     pub company_name: String,
@@ -92,6 +93,7 @@ pub struct JobOpportunity {
 #[diesel(table_name = job_opportunities)]
 pub struct NewJobOpportunity {
     pub title: String,
+    pub userId:i64,
     pub description: String,
     pub company_name: String,
     pub company_logo_url: Option<String>,

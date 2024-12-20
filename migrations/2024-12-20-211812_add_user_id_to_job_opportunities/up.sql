@@ -1,0 +1,2 @@
+ALTER TABLE job_opportunities
+ADD COLUMN user_id BIGINT REFERENCES users(id) ON DELETE CASCADE;

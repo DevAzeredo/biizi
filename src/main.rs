@@ -1,13 +1,13 @@
 use axum::{
-    middleware,
     extract::{connect_info::ConnectInfo, Path, State},
     http::StatusCode,
+    middleware,
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
 use diesel_async::{pooled_connection::AsyncDieselConnectionManager, AsyncPgConnection};
-use domain::models::{NewCompany, NewEmployee, NewJobOpportunity, NewUser};
+use domain::models::{NewCompany, NewEmployee, NewJobOpportunity, NewUser, User};
 use infrastructure::auth;
 use std::{net::SocketAddr, path::PathBuf};
 use tokio::net::TcpListener;
@@ -16,12 +16,11 @@ use tower_http::{
     trace::{DefaultMakeSpan, TraceLayer},
 };
 
-
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 mod infrastructure {
+    pub mod auth;
     pub mod repositories;
     pub mod schema;
-    pub mod auth;
 }
 
 mod websocket {
@@ -70,9 +69,10 @@ pub async fn send_message_handler(
 async fn create_employee(
     State(pool): State<Pool>,
     Json(employee): Json<NewEmployee>,
+    extensions: axum::extract::Extension<User>,
 ) -> Result<Json<Employee>, (StatusCode, String)> {
     let mut conn = pool.get().await.map_err(internal_error)?;
-    let res = Service::add_employee(&mut conn, employee)
+    let res = Service::add_employee(&mut conn, employee, extensions.0)
         .await
         .map_err(internal_error)?;
     Ok(res)
@@ -95,7 +95,7 @@ pub async fn register_user(
         password: hashed_password,
     };
 
-    let token = Service::register_user(&mut conn,new_user)
+    let token = Service::register_user(&mut conn, new_user)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -119,9 +119,10 @@ async fn login(
 async fn create_company(
     State(pool): State<Pool>,
     Json(company): Json<NewCompany>,
+    extensions: axum::extract::Extension<User>,
 ) -> Result<Json<Company>, (StatusCode, String)> {
     let mut conn = pool.get().await.map_err(internal_error)?;
-    let res = Service::add_company(&mut conn, company)
+    let res = Service::add_company(&mut conn, company, extensions.0)
         .await
         .map_err(internal_error)?;
     Ok(res)
@@ -130,9 +131,10 @@ async fn create_company(
 async fn create_job(
     State(pool): State<Pool>,
     Json(job): Json<NewJobOpportunity>,
+    extensions: axum::extract::Extension<User>,
 ) -> Result<Json<JobOpportunity>, (StatusCode, String)> {
     let mut conn = pool.get().await.map_err(internal_error)?;
-    let res = Service::add_job_opportunity(&mut conn, job)
+    let res = Service::add_job_opportunity(&mut conn, job, extensions.0)
         .await
         .map_err(internal_error)?;
     Ok(res)
@@ -156,9 +158,18 @@ async fn create_router(ws_manager: WebSocketManager) -> Router {
         // Rota para enviar mensagens
         .route("/send/:addr", post(send_message_handler))
         .with_state(ws_manager)
-        .route("/employees", post(create_employee).layer(middleware::from_fn(auth::authorize)))
-        .route("/companies", post(create_company))
-        .route("/jobs", post(create_job))
+        .route(
+            "/employees",
+            post(create_employee).layer(middleware::from_fn(auth::authorize)),
+        )
+        .route(
+            "/companies",
+            post(create_company).layer(middleware::from_fn(auth::authorize)),
+        )
+        .route(
+            "/jobs",
+            post(create_job).layer(middleware::from_fn(auth::authorize)),
+        )
         .route("/login", post(login))
         .route("/register", post(register_user))
         .with_state(pool)
