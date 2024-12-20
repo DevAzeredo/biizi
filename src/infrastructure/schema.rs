@@ -4,7 +4,7 @@ diesel::table! {
     companies (id) {
         id -> Int8,
         name -> Varchar,
-        description -> Text,
+        description -> Varchar,
         address -> Varchar,
         logo_url -> Varchar,
     }
@@ -15,13 +15,13 @@ diesel::table! {
         id -> Int8,
         full_name -> Varchar,
         date_of_birth -> Varchar,
-        gender -> Nullable<Varchar>,
+        gender -> Varchar,
         email -> Varchar,
         phone -> Varchar,
         residential_address -> Varchar,
         is_available -> Bool,
-        latitude -> Nullable<Float8>,
-        longitude -> Nullable<Float8>,
+        latitude -> Float8,
+        longitude -> Float8,
         rating -> Float8,
     }
 }
@@ -30,9 +30,9 @@ diesel::table! {
     job_opportunities (id) {
         id -> Int8,
         title -> Varchar,
-        description -> Text,
+        description -> Varchar,
         company_name -> Varchar,
-        company_logo_url -> Nullable<Varchar>,
+        company_logo_url -> Varchar,
         category -> Varchar,
         address -> Varchar,
         latitude -> Float8,
@@ -44,8 +44,22 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    users (id) {
+        id -> Int8,
+        login -> Varchar,
+        password -> Varchar,
+        companyid -> Nullable<Int8>,
+        employeeid -> Nullable<Int8>,
+    }
+}
+
+diesel::joinable!(users -> companies (companyid));
+diesel::joinable!(users -> employees (employeeid));
+
 diesel::allow_tables_to_appear_in_same_query!(
     companies,
     employees,
     job_opportunities,
+    users,
 );
