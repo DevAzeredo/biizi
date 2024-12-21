@@ -41,7 +41,7 @@ diesel::table! {
         duration_in_hours -> Int4,
         pay_rate -> Float8,
         status -> Varchar,
-        user_id -> Nullable<Int8>,
+        company_id -> Int8,
     }
 }
 
@@ -55,7 +55,7 @@ diesel::table! {
     }
 }
 
-diesel::joinable!(job_opportunities -> users (user_id));
+diesel::joinable!(job_opportunities -> users (company_id));
 diesel::joinable!(users -> companies (companyid));
 diesel::joinable!(users -> employees (employeeid));
 

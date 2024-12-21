@@ -73,7 +73,7 @@ pub struct NewUser {
 #[diesel(table_name = job_opportunities)]
 pub struct JobOpportunity {
     pub id: i64,
-    pub user_id:Option<i64>,
+    pub company_id:i64,
     pub title: String,
     pub description: String,
     pub company_name: String,
@@ -93,10 +93,10 @@ pub struct JobOpportunity {
 #[diesel(table_name = job_opportunities)]
 pub struct NewJobOpportunity {
     pub title: String,
-    pub userId:i64,
     pub description: String,
+    pub company_id:i64,
     pub company_name: String,
-    pub company_logo_url: Option<String>,
+    pub company_logo_url: String,
     pub category: String,
     pub address: String,
     pub latitude: f64,

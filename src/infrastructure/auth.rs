@@ -1,12 +1,8 @@
 use axum::{
-    extract::{Request, State},
-    http::{self, Response, StatusCode},
-    middleware::Next,
-    response::IntoResponse,
-    Json,
+    body::Body, extract::{FromRequest, Request, State}, http::{self, Response, StatusCode}, middleware::Next, response::IntoResponse, Json
 };
 
-use crate::{Pool, Service};
+use crate::{domain::models::User, Pool, Service};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 pub struct AuthError {
@@ -82,4 +78,22 @@ pub async fn authorize(
     req.extensions_mut().insert(user);
 
     Ok(next.run(req).await)
+}
+
+pub struct AuthenticatedUser(pub User);
+
+#[axum::async_trait]
+impl<B> FromRequest<B> for AuthenticatedUser
+where
+    B: Send,
+{
+    type Rejection = (StatusCode, String);
+
+    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
+        let user = req.extensions().get::<User>().cloned();
+        match user {
+            Some(user) => Ok(AuthenticatedUser(user)),
+            None => Err((StatusCode::UNAUTHORIZED, "User not found".to_string())),
+        }
+    }
 }

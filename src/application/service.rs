@@ -14,6 +14,22 @@ use crate::{
 pub struct Service;
 const SECRET: &str = "senhafortexD";
 impl Service {
+    pub async fn validate_jwt_and_get_user(
+        conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+        token: &str,
+    ) -> Result<User, String> {
+        let claims = match Self::validate_jwt(token) {
+            Ok(claims) => claims,
+            Err(err) => return Err(format!("Invalid token: {}", err)),
+        };
+
+        let user = match Repository::find_by_login(conn, &claims.sub).await {
+            Ok(user) => user,
+            Err(_) => return Err("User not found".to_string()),
+        };
+
+        Ok(user)
+    }
     pub async fn find_by_login(
         conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
         user_login: &str,
@@ -43,7 +59,7 @@ impl Service {
         user: User,
     ) -> Result<Json<JobOpportunity>, diesel::result::Error> {
         let new_job = NewJobOpportunity {
-            userId: user.id,
+            company_id: user.companyid.unwrap_or_else(|| 0),
             ..job.clone()
         };
         Repository::save_job_opportunity(conn, &new_job).await

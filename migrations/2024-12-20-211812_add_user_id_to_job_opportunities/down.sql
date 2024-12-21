@@ -1,2 +1,2 @@
 ALTER TABLE job_opportunities
-DROP COLUMN user_id;
+DROP COLUMN company_id;

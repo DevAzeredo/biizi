@@ -8,7 +8,7 @@ use axum::{
 };
 use diesel_async::{pooled_connection::AsyncDieselConnectionManager, AsyncPgConnection};
 use domain::models::{NewCompany, NewEmployee, NewJobOpportunity, NewUser, User};
-use infrastructure::auth;
+use infrastructure::auth::{self, authorize, AuthenticatedUser};
 use std::{net::SocketAddr, path::PathBuf};
 use tokio::net::TcpListener;
 use tower_http::{
@@ -69,10 +69,10 @@ pub async fn send_message_handler(
 async fn create_employee(
     State(pool): State<Pool>,
     Json(employee): Json<NewEmployee>,
-    extensions: axum::extract::Extension<User>,
+    AuthenticatedUser(user): AuthenticatedUser,
 ) -> Result<Json<Employee>, (StatusCode, String)> {
     let mut conn = pool.get().await.map_err(internal_error)?;
-    let res = Service::add_employee(&mut conn, employee, extensions.0)
+    let res = Service::add_employee(&mut conn, employee, user)
         .await
         .map_err(internal_error)?;
     Ok(res)
@@ -119,10 +119,10 @@ async fn login(
 async fn create_company(
     State(pool): State<Pool>,
     Json(company): Json<NewCompany>,
-    extensions: axum::extract::Extension<User>,
+    AuthenticatedUser(user): AuthenticatedUser,
 ) -> Result<Json<Company>, (StatusCode, String)> {
     let mut conn = pool.get().await.map_err(internal_error)?;
-    let res = Service::add_company(&mut conn, company, extensions.0)
+    let res = Service::add_company(&mut conn, company, user)
         .await
         .map_err(internal_error)?;
     Ok(res)
@@ -131,10 +131,10 @@ async fn create_company(
 async fn create_job(
     State(pool): State<Pool>,
     Json(job): Json<NewJobOpportunity>,
-    extensions: axum::extract::Extension<User>,
+    AuthenticatedUser(user): AuthenticatedUser,
 ) -> Result<Json<JobOpportunity>, (StatusCode, String)> {
     let mut conn = pool.get().await.map_err(internal_error)?;
-    let res = Service::add_job_opportunity(&mut conn, job, extensions.0)
+    let res = Service::add_job_opportunity(&mut conn, job, user)
         .await
         .map_err(internal_error)?;
     Ok(res)
@@ -160,15 +160,15 @@ async fn create_router(ws_manager: WebSocketManager) -> Router {
         .with_state(ws_manager)
         .route(
             "/employees",
-            post(create_employee).layer(middleware::from_fn(auth::authorize)),
+            post(create_employee).layer(axum::middleware::from_fn(authorize)),
         )
         .route(
             "/companies",
-            post(create_company).layer(middleware::from_fn(auth::authorize)),
+            post(create_company).layer(axum::middleware::from_fn(authorize)),
         )
         .route(
             "/jobs",
-            post(create_job).layer(middleware::from_fn(auth::authorize)),
+            post(create_job).layer(axum::middleware::from_fn(authorize)),
         )
         .route("/login", post(login))
         .route("/register", post(register_user))
