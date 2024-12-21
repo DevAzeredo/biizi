@@ -73,11 +73,8 @@ pub struct NewUser {
 #[diesel(table_name = job_opportunities)]
 pub struct JobOpportunity {
     pub id: i64,
-    pub company_id:i64,
     pub title: String,
     pub description: String,
-    pub company_name: String,
-    pub company_logo_url: String,
     pub category: String,
     pub address: String,
     pub latitude: f64,
@@ -86,18 +83,16 @@ pub struct JobOpportunity {
     pub duration_in_hours: i32,
     pub pay_rate: f64,
     pub status: String,
+    pub company_id: Option<i64>,
 }
 
 
 #[derive(Deserialize, Insertable, Queryable, Clone)]
 #[diesel(table_name = job_opportunities)]
 pub struct NewJobOpportunity {
+    pub company_id:Option<i64>,
     pub title: String,
     pub description: String,
-    pub company_id:i64,
-    pub company_name: String,
-    pub company_logo_url: String,
-    pub category: String,
     pub address: String,
     pub latitude: f64,
     pub longitude: f64,

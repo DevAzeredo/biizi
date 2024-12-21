@@ -1,5 +1,3 @@
-// @generated automatically by Diesel CLI.
-
 diesel::table! {
     companies (id) {
         id -> Int8,
@@ -31,8 +29,6 @@ diesel::table! {
         id -> Int8,
         title -> Varchar,
         description -> Varchar,
-        company_name -> Varchar,
-        company_logo_url -> Varchar,
         category -> Varchar,
         address -> Varchar,
         latitude -> Float8,
@@ -41,7 +37,7 @@ diesel::table! {
         duration_in_hours -> Int4,
         pay_rate -> Float8,
         status -> Varchar,
-        company_id -> Int8,
+        company_id -> Nullable<Int8>,
     }
 }
 
@@ -55,7 +51,7 @@ diesel::table! {
     }
 }
 
-diesel::joinable!(job_opportunities -> users (company_id));
+diesel::joinable!(job_opportunities -> companies (company_id));
 diesel::joinable!(users -> companies (companyid));
 diesel::joinable!(users -> employees (employeeid));
 

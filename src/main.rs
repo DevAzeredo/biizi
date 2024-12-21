@@ -1,14 +1,9 @@
 use axum::{
-    extract::{connect_info::ConnectInfo, Path, State},
-    http::StatusCode,
-    middleware,
-    response::IntoResponse,
-    routing::{get, post},
-    Json, Router,
+    extract::{connect_info::ConnectInfo, Path, State}, http::StatusCode,  response::IntoResponse, routing::{get, post}, Extension, Json, Router
 };
 use diesel_async::{pooled_connection::AsyncDieselConnectionManager, AsyncPgConnection};
 use domain::models::{NewCompany, NewEmployee, NewJobOpportunity, NewUser, User};
-use infrastructure::auth::{self, authorize, AuthenticatedUser};
+use infrastructure::auth::{self, Auth, SignInData};
 use std::{net::SocketAddr, path::PathBuf};
 use tokio::net::TcpListener;
 use tower_http::{
@@ -68,13 +63,13 @@ pub async fn send_message_handler(
 
 async fn create_employee(
     State(pool): State<Pool>,
+    Extension(user): Extension<User>,
     Json(employee): Json<NewEmployee>,
-    AuthenticatedUser(user): AuthenticatedUser,
-) -> Result<Json<Employee>, (StatusCode, String)> {
-    let mut conn = pool.get().await.map_err(internal_error)?;
+) -> Result<Json<Employee>, StatusCode> {
+    let mut conn = pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
     let res = Service::add_employee(&mut conn, employee, user)
         .await
-        .map_err(internal_error)?;
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
     Ok(res)
 }
 
@@ -104,39 +99,37 @@ pub async fn register_user(
 
 async fn login(
     State(pool): State<Pool>,
-    Json(credentials): Json<NewUser>,
-) -> Result<String, (StatusCode, String)> {
-    let mut conn = pool.get().await.map_err(internal_error)?;
-    let user = Service::authenticate(&mut conn, &credentials.login, &credentials.password)
+    Json(credentials): Json<SignInData>,
+) -> Result<String, StatusCode> {
+   let mut conn = pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
+    let token = auth::sign_in(&mut conn, credentials)
         .await
-        .map_err(|_| (StatusCode::UNAUTHORIZED, "Invalid credentials".to_string()))?;
-
-    let token = Service::generate_jwt(&user).map_err(internal_error)?;
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
 
     Ok(token)
 }
 
 async fn create_company(
     State(pool): State<Pool>,
+    Extension(user): Extension<User>,
     Json(company): Json<NewCompany>,
-    AuthenticatedUser(user): AuthenticatedUser,
-) -> Result<Json<Company>, (StatusCode, String)> {
-    let mut conn = pool.get().await.map_err(internal_error)?;
+) -> Result<Json<Company>, StatusCode> {
+    let mut conn = pool.get().await.map_err(internal_error).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
     let res = Service::add_company(&mut conn, company, user)
         .await
-        .map_err(internal_error)?;
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
     Ok(res)
 }
 
 async fn create_job(
     State(pool): State<Pool>,
+    Extension(user): Extension<User>,
     Json(job): Json<NewJobOpportunity>,
-    AuthenticatedUser(user): AuthenticatedUser,
-) -> Result<Json<JobOpportunity>, (StatusCode, String)> {
-    let mut conn = pool.get().await.map_err(internal_error)?;
+) -> Result<Json<JobOpportunity>, StatusCode> {
+    let mut conn = pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let res = Service::add_job_opportunity(&mut conn, job, user)
         .await
-        .map_err(internal_error)?;
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
     Ok(res)
 }
 
@@ -160,15 +153,15 @@ async fn create_router(ws_manager: WebSocketManager) -> Router {
         .with_state(ws_manager)
         .route(
             "/employees",
-            post(create_employee).layer(axum::middleware::from_fn(authorize)),
+            post(create_employee).route_layer(axum::middleware::from_fn_with_state(pool.clone(),Auth::authorize)),
         )
         .route(
             "/companies",
-            post(create_company).layer(axum::middleware::from_fn(authorize)),
+            post(create_company).route_layer(axum::middleware::from_fn_with_state(pool.clone(),Auth::authorize)),
         )
         .route(
             "/jobs",
-            post(create_job).layer(axum::middleware::from_fn(authorize)),
+            post(create_job).route_layer(axum::middleware::from_fn_with_state(pool.clone(),Auth::authorize)),
         )
         .route("/login", post(login))
         .route("/register", post(register_user))
