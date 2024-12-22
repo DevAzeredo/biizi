@@ -9,7 +9,6 @@
     pkgs.stdenv.cc
     pkgs.rustup
     pkgs.diesel-cli
-    pkgs.sudo
   ];
   services.postgres = {
   enable = true;   

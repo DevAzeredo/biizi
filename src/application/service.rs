@@ -11,7 +11,6 @@ use crate::{
 
 pub struct Service;
 impl Service {
-
     pub async fn find_by_login(
         conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
         user_login: &str,
@@ -24,7 +23,7 @@ impl Service {
         employee: NewEmployee,
         user: User,
     ) -> Result<Json<Employee>, diesel::result::Error> {
-        Repository::save_employee(conn, &employee, &user).await
+            Repository::save_employee(conn, &employee, &user).await
     }
 
     pub async fn add_company(
@@ -40,10 +39,13 @@ impl Service {
         job: NewJobOpportunity,
         user: User,
     ) -> Result<Json<JobOpportunity>, diesel::result::Error> {
+        println!("{:?}", job);
+        println!("{:?}", user);
         let new_job = NewJobOpportunity {
             company_id: user.companyid,
             ..job.clone()
         };
+
         Repository::save_job_opportunity(conn, &new_job).await
     }
 
@@ -55,7 +57,18 @@ impl Service {
             Ok(_) => return Err(diesel::result::Error::BrokenTransactionManager),
             Err(_) => {}
         }
-        let user = Repository::save_user(conn, &new_user).await?;
+
+       let hashed_password = match Auth::hash_password(&new_user.password.clone()) {
+            Ok(hashed_pass) => hashed_pass,
+            Err(_) => return Err(diesel::result::Error::BrokenTransactionManager),
+        };
+
+        let new_user_hashed = NewUser{
+            login : new_user.login.clone(),
+            password : hashed_password
+        };
+
+        let user = Repository::save_user(conn, &new_user_hashed).await?;
         let token = match Auth::encode_jwt(user.login.clone()) {
             Ok(token) => Ok(token),
             Err(_) => Err(diesel::result::Error::BrokenTransactionManager),

@@ -93,7 +93,7 @@ impl Auth {
         };
 
         let mut header = auth_header.split_whitespace();
-        let (bearer, token) = (header.next(), header.next());
+        let (_, token) = (header.next(), header.next());
 
         let token_data = match Auth::decode_jwt(token.unwrap().to_string()) {
             Ok(data) => data,
@@ -134,7 +134,6 @@ pub async fn sign_in(
     let user = Service::find_by_login(conn, &user_data.login)
         .await
         .map_err(|_| StatusCode::UNAUTHORIZED)?;
-
     if !Auth::verify_password(&user_data.password, &user.password)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     {

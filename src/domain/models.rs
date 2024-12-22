@@ -52,7 +52,7 @@ pub struct NewCompany {
     pub logo_url: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Queryable, Selectable, Identifiable, Clone, AsChangeset)]
+#[derive(Deserialize, Serialize, Queryable, Selectable, Identifiable, Clone, AsChangeset, Debug)]
 #[diesel(table_name = users)]
 pub struct User {
     pub id: i64,
@@ -87,13 +87,14 @@ pub struct JobOpportunity {
 }
 
 
-#[derive(Deserialize, Insertable, Queryable, Clone)]
+#[derive(Deserialize, Insertable, Queryable, Clone, Debug)]
 #[diesel(table_name = job_opportunities)]
 pub struct NewJobOpportunity {
     pub company_id:Option<i64>,
     pub title: String,
     pub description: String,
     pub address: String,
+    pub category: String, 
     pub latitude: f64,
     pub longitude: f64,
     pub start_date_time: String,

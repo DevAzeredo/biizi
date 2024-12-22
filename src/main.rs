@@ -75,21 +75,9 @@ async fn create_employee(
 
 pub async fn register_user(
     State(pool): State<Pool>,
-    Json(payload): Json<NewUser>,
+    Json(new_user): Json<NewUser>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let mut conn = pool.get().await.map_err(internal_error)?;
-    let hashed_password = bcrypt::hash(&payload.password, bcrypt::DEFAULT_COST).map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Failed to hash password".to_string(),
-        )
-    })?;
-
-    let new_user = NewUser {
-        login: payload.login.clone(),
-        password: hashed_password,
-    };
-
     let token = Service::register_user(&mut conn, new_user)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
