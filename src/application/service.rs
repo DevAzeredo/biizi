@@ -18,6 +18,21 @@ impl Service {
         Repository::find_by_login(conn, user_login).await
     }
 
+    pub async fn find_employee(
+        conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+        employe_id: &i64,
+    ) -> Result<Employee, diesel::result::Error> {
+        Repository::find_employe(conn, employe_id).await
+    }
+    
+    pub async fn find_company(
+        conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+       company_id: &i64,
+    ) -> Result<Company, diesel::result::Error> {
+        Repository::find_company(conn, company_id).await
+    }
+
+
     pub async fn add_employee(
         conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
         employee: NewEmployee,

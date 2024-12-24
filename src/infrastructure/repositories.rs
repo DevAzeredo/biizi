@@ -133,4 +133,30 @@ impl Repository {
 
         Ok(user)
     }
+
+    pub async fn find_employe(
+        conn: &mut AsyncPgConnection,
+        employe_id: &i64,
+    ) -> Result<Employee, diesel::result::Error> {
+        use crate::infrastructure::schema::employees::dsl::*;
+        let employee = employees
+            .filter(id.eq(employe_id))
+            .first::<Employee>(conn)
+            .await?;
+
+        Ok(employee)
+    }
+
+    pub async fn find_company(
+        conn: &mut AsyncPgConnection,
+        company_id: &i64,
+    ) -> Result<Company, diesel::result::Error> {
+        use crate::infrastructure::schema::companies::dsl::*;
+        let company = companies
+            .filter(id.eq(company_id))
+            .first::<Company>(conn)
+            .await?;
+
+        Ok(company)
+    }
 }

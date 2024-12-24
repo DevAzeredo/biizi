@@ -61,6 +61,36 @@ pub async fn send_message_handler(
     }
 }
 
+async fn get_employee(
+    State(pool): State<Pool>,
+    Extension(user): Extension<User>,
+) -> Result<Json<Employee>, StatusCode> {
+    let mut conn = pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    match user.employeeid {
+        Some(id) =>  match Service::find_employee(&mut conn, &id).await {
+            Ok(employee) => Ok(Json(employee)),
+            Err(_) => Err(StatusCode::NOT_FOUND),
+        }
+        None=>Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn get_company(
+    State(pool): State<Pool>,
+    Extension(user): Extension<User>,
+) -> Result<Json<Company>, StatusCode> {
+    let mut conn = pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    match user.companyid {
+        Some(id) =>  match Service::find_company(&mut conn, &id).await {
+            Ok(company) => Ok(Json(company)),
+            Err(_) => Err(StatusCode::NOT_FOUND),
+        }
+        None=>Err(StatusCode::NOT_FOUND),
+    }
+}
+
 async fn create_employee(
     State(pool): State<Pool>,
     Extension(user): Extension<User>,
@@ -144,8 +174,22 @@ async fn create_router(ws_manager: WebSocketManager) -> Router {
             post(create_employee).route_layer(axum::middleware::from_fn_with_state(pool.clone(),Auth::authorize)),
         )
         .route(
+            "/employees",
+            get(get_employee).route_layer(axum::middleware::from_fn_with_state(
+                pool.clone(),
+                Auth::authorize,
+            )),
+        )
+        .route(
             "/companies",
             post(create_company).route_layer(axum::middleware::from_fn_with_state(pool.clone(),Auth::authorize)),
+        )
+        .route(
+            "/companies",
+            get(get_company).route_layer(axum::middleware::from_fn_with_state(
+                pool.clone(),
+                Auth::authorize,
+            )),
         )
         .route(
             "/jobs",
