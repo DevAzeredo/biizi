@@ -40,6 +40,14 @@ impl Service {
     ) -> Result<Json<Employee>, diesel::result::Error> {
             Repository::save_employee(conn, &employee, &user).await
     }
+    pub async fn update_company_logo(
+        conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
+        company_id: i64,
+        logo_url: String,
+    ) -> Result<Json<Company>, diesel::result::Error> {
+        Repository::update_company_logo(conn, &company_id, &logo_url).await
+    }
+
 
     pub async fn add_company(
         conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
@@ -54,8 +62,6 @@ impl Service {
         job: NewJobOpportunity,
         user: User,
     ) -> Result<Json<JobOpportunity>, diesel::result::Error> {
-        println!("{:?}", job);
-        println!("{:?}", user);
         let new_job = NewJobOpportunity {
             company_id: user.companyid,
             ..job.clone()

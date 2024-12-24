@@ -20,7 +20,7 @@ impl Repository {
         new_employee: &NewEmployee,
         user: &User,
     ) -> Result<Json<Employee>, diesel::result::Error> {
-        let res:Employee;
+        let res: Employee;
         match user.employeeid.is_some() {
             true => {
                 res = diesel::update(employees::table.find(user.employeeid.unwrap()))
@@ -37,7 +37,6 @@ impl Repository {
                         latitude.eq(new_employee.latitude.unwrap_or_else(|| 0.0)),
                         longitude.eq(new_employee.longitude.unwrap_or_else(|| 0.0)),
                         date_of_birth.eq(new_employee.date_of_birth.clone()),
-                   
                     ))
                     .get_result(conn)
                     .await?;
@@ -52,11 +51,11 @@ impl Repository {
                     .values(new_employee.clone())
                     .get_result(conn)
                     .await?;
-               
-            diesel::update(users::table.filter(users::id.eq(user.id))) 
-                .set(employeeid.eq(res.id)) 
-                .execute(conn)
-                .await?;
+
+                diesel::update(users::table.filter(users::id.eq(user.id)))
+                    .set(employeeid.eq(res.id))
+                    .execute(conn)
+                    .await?;
             }
         }
 
@@ -69,7 +68,7 @@ impl Repository {
         user: &User,
     ) -> Result<Json<Company>, diesel::result::Error> {
         let res: Company;
-  
+
         if user.companyid.is_some() {
             res = diesel::update(companies::table.find(user.companyid.unwrap()))
                 .set((
@@ -84,18 +83,31 @@ impl Repository {
                 .get_result(conn)
                 .await?;
         } else {
-            
             res = diesel::insert_into(companies::table)
                 .values(new_company.clone())
                 .get_result(conn)
                 .await?;
 
-            diesel::update(users::table.filter(users::id.eq(user.id))) 
-                .set(companyid.eq(res.id)) 
+            diesel::update(users::table.filter(users::id.eq(user.id)))
+                .set(companyid.eq(res.id))
                 .execute(conn)
                 .await?;
         }
 
+        Ok(Json(res))
+    }
+
+    pub async fn update_company_logo(
+        conn: &mut AsyncPgConnection,
+        company_id: &i64,
+        logo: &String,
+    ) -> Result<Json<Company>, diesel::result::Error> {
+        let res = diesel::update(companies::table.find(company_id))
+        .set(
+            logo_url.eq(logo)
+        )
+        .get_result(conn)
+        .await?;
         Ok(Json(res))
     }
 

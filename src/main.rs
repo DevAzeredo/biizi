@@ -1,6 +1,11 @@
 use axum::{
-    extract::{connect_info::ConnectInfo, Path, State}, http::StatusCode,  response::IntoResponse, routing::{get, post}, Extension, Json, Router
+    extract::{connect_info::ConnectInfo, Multipart, Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{get, post},
+    Extension, Json, Router,
 };
+
 use diesel_async::{pooled_connection::AsyncDieselConnectionManager, AsyncPgConnection};
 use domain::models::{NewCompany, NewEmployee, NewJobOpportunity, NewUser, User};
 use infrastructure::auth::{self, Auth, SignInData};
@@ -10,6 +15,7 @@ use tower_http::{
     services::ServeDir,
     trace::{DefaultMakeSpan, TraceLayer},
 };
+use uuid::Uuid;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 mod infrastructure {
@@ -65,14 +71,17 @@ async fn get_employee(
     State(pool): State<Pool>,
     Extension(user): Extension<User>,
 ) -> Result<Json<Employee>, StatusCode> {
-    let mut conn = pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = pool
+        .get()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     match user.employeeid {
-        Some(id) =>  match Service::find_employee(&mut conn, &id).await {
+        Some(id) => match Service::find_employee(&mut conn, &id).await {
             Ok(employee) => Ok(Json(employee)),
             Err(_) => Err(StatusCode::NOT_FOUND),
-        }
-        None=>Err(StatusCode::NOT_FOUND),
+        },
+        None => Err(StatusCode::NOT_FOUND),
     }
 }
 
@@ -80,14 +89,17 @@ async fn get_company(
     State(pool): State<Pool>,
     Extension(user): Extension<User>,
 ) -> Result<Json<Company>, StatusCode> {
-    let mut conn = pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = pool
+        .get()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     match user.companyid {
-        Some(id) =>  match Service::find_company(&mut conn, &id).await {
+        Some(id) => match Service::find_company(&mut conn, &id).await {
             Ok(company) => Ok(Json(company)),
             Err(_) => Err(StatusCode::NOT_FOUND),
-        }
-        None=>Err(StatusCode::NOT_FOUND),
+        },
+        None => Err(StatusCode::NOT_FOUND),
     }
 }
 
@@ -96,17 +108,20 @@ async fn create_employee(
     Extension(user): Extension<User>,
     Json(employee): Json<NewEmployee>,
 ) -> Result<Json<Employee>, StatusCode> {
-    let mut conn = pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
+    let mut conn = pool
+        .get()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let res = Service::add_employee(&mut conn, employee, user)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(res)
 }
 
 pub async fn register_user(
     State(pool): State<Pool>,
     Json(new_user): Json<NewUser>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
+) -> Result<String, (StatusCode, String)> {
     let mut conn = pool.get().await.map_err(internal_error)?;
     let token = Service::register_user(&mut conn, new_user)
         .await
@@ -119,12 +134,67 @@ async fn login(
     State(pool): State<Pool>,
     Json(credentials): Json<SignInData>,
 ) -> Result<String, StatusCode> {
-   let mut conn = pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
+    let mut conn = pool
+        .get()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let token = auth::sign_in(&mut conn, credentials)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(token)
+}
+
+async fn upload_company_logo(
+    State(pool): State<Pool>,
+    Extension(user): Extension<User>,
+    mut multipart: Multipart,
+) -> Result<impl IntoResponse, StatusCode> {
+    let company_id = match user.companyid {
+        Some(id) => id,
+        _ => return Err(StatusCode::BAD_REQUEST),
+    };
+
+    while let Some(field) = multipart
+        .next_field()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    {
+        let field_name = field.name().unwrap_or("").to_string();
+
+        if field_name == "logo" {
+            let data = field
+                .bytes()
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            let file_name = format!("{}_{}.png", Uuid::new_v4(), company_id);
+            let file_path = format!("./assets/logos/{}", file_name);
+
+            // Cria o diretório se não existir
+            tokio::fs::create_dir_all("./assets/logos")
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+            // Salva o arquivo
+            tokio::fs::write(&file_path, &data)
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+            // Atualiza o banco de dados
+            let mut conn = pool
+                .get()
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+            let _ = Service::update_company_logo(&mut conn, company_id, file_name.clone())
+                .await
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+            return Ok(format!("Logo uploaded successfully: {}", file_name).into_response());
+        }
+    }
+
+    Err(StatusCode::BAD_REQUEST)
 }
 
 async fn create_company(
@@ -132,10 +202,14 @@ async fn create_company(
     Extension(user): Extension<User>,
     Json(company): Json<NewCompany>,
 ) -> Result<Json<Company>, StatusCode> {
-    let mut conn = pool.get().await.map_err(internal_error).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
+    let mut conn = pool
+        .get()
+        .await
+        .map_err(internal_error)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let res = Service::add_company(&mut conn, company, user)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(res)
 }
 
@@ -144,10 +218,13 @@ async fn create_job(
     Extension(user): Extension<User>,
     Json(job): Json<NewJobOpportunity>,
 ) -> Result<Json<JobOpportunity>, StatusCode> {
-    let mut conn = pool.get().await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut conn = pool
+        .get()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let res = Service::add_job_opportunity(&mut conn, job, user)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?; 
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(res)
 }
 
@@ -171,7 +248,10 @@ async fn create_router(ws_manager: WebSocketManager) -> Router {
         .with_state(ws_manager)
         .route(
             "/employees",
-            post(create_employee).route_layer(axum::middleware::from_fn_with_state(pool.clone(),Auth::authorize)),
+            post(create_employee).route_layer(axum::middleware::from_fn_with_state(
+                pool.clone(),
+                Auth::authorize,
+            )),
         )
         .route(
             "/employees",
@@ -182,7 +262,10 @@ async fn create_router(ws_manager: WebSocketManager) -> Router {
         )
         .route(
             "/companies",
-            post(create_company).route_layer(axum::middleware::from_fn_with_state(pool.clone(),Auth::authorize)),
+            post(create_company).route_layer(axum::middleware::from_fn_with_state(
+                pool.clone(),
+                Auth::authorize,
+            )),
         )
         .route(
             "/companies",
@@ -192,8 +275,18 @@ async fn create_router(ws_manager: WebSocketManager) -> Router {
             )),
         )
         .route(
+            "/companies/upload-logo",
+            post(upload_company_logo).route_layer(axum::middleware::from_fn_with_state(
+                pool.clone(),
+                Auth::authorize,
+            )),
+        )
+        .route(
             "/jobs",
-            post(create_job).route_layer(axum::middleware::from_fn_with_state(pool.clone(),Auth::authorize)),
+            post(create_job).route_layer(axum::middleware::from_fn_with_state(
+                pool.clone(),
+                Auth::authorize,
+            )),
         )
         .route("/login", post(login))
         .route("/register", post(register_user))
