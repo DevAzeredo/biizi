@@ -1,12 +1,13 @@
 use crate::{
     domain::models::{
-        Company, Employee, JobOpportunity, NewCompany, NewEmployee, NewJobOpportunity, NewUser,
-        User,
+        Company, Employee, JobOpportunity, JobOpportunityWithCompany, NewCompany, NewEmployee,
+        NewJobOpportunity, NewUser, User,
     },
     infrastructure::schema::*,
 };
 use axum::response::Json;
 use companies::{address, description, logo_url, name};
+use diesel::SelectableHelper;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use employees::*;
@@ -103,11 +104,9 @@ impl Repository {
         logo: &String,
     ) -> Result<Json<Company>, diesel::result::Error> {
         let res = diesel::update(companies::table.find(company_id))
-        .set(
-            logo_url.eq(logo)
-        )
-        .get_result(conn)
-        .await?;
+            .set(logo_url.eq(logo))
+            .get_result(conn)
+            .await?;
         Ok(Json(res))
     }
 
@@ -131,6 +130,43 @@ impl Repository {
             .get_result(conn)
             .await?;
         Ok(Json(res))
+    }
+
+    pub async fn find_job_opportunities_with_company(
+        conn: &mut AsyncPgConnection,
+        pcompany_id: &i64,
+    ) -> Result<Vec<JobOpportunityWithCompany>, diesel::result::Error> {
+        use crate::infrastructure::schema::job_opportunities::dsl::*;
+
+        let jobs = job_opportunities
+            .filter(company_id.eq(*pcompany_id))
+            .select(JobOpportunity::as_select())
+            .load::<JobOpportunity>(conn)
+            .await?;
+
+        let comp = Self::find_company(conn, pcompany_id).await?;
+
+        let result = jobs
+            .into_iter()
+            .map(|job| JobOpportunityWithCompany {
+                id: job.id,
+                title: job.title,
+                description: job.description,
+                category: job.category,
+                address: job.address,
+                latitude: job.latitude,
+                longitude: job.longitude,
+                start_date_time: job.start_date_time,
+                duration_in_hours: job.duration_in_hours,
+                pay_rate: job.pay_rate,
+                status: job.status,
+                company_id: job.company_id,
+                company_name: Some(comp.name.clone()),
+                company_logo_url: Some(comp.logo_url.clone()),
+            })
+            .collect();
+
+        Ok(result)
     }
 
     pub async fn find_by_login(

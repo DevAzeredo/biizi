@@ -15,7 +15,6 @@ use tower_http::{
     services::ServeDir,
     trace::{DefaultMakeSpan, TraceLayer},
 };
-use uuid::Uuid;
 
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 mod infrastructure {
@@ -167,7 +166,7 @@ async fn upload_company_logo(
                 .bytes()
                 .await
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-            let file_name = format!("{}_{}.png", Uuid::new_v4(), company_id);
+            let file_name = format!("{}.png", company_id);
             let file_path = format!("./assets/logos/{}", file_name);
 
             // Cria o diretório se não existir
@@ -195,6 +194,22 @@ async fn upload_company_logo(
     }
 
     Err(StatusCode::BAD_REQUEST)
+}
+
+pub async fn list_job_opportunities(
+    State(pool): State<Pool>,
+    Path(company_id): Path<i64>,  
+) -> Result<impl IntoResponse, StatusCode> {
+    let mut conn = pool
+        .get()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let results = Service::get_job_opportunities_with_company(&mut conn, company_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(results))
 }
 
 async fn create_company(
@@ -288,6 +303,7 @@ async fn create_router(ws_manager: WebSocketManager) -> Router {
                 Auth::authorize,
             )),
         )
+        .route("/jobs/:company_id", get(list_job_opportunities))
         .route("/login", post(login))
         .route("/register", post(register_user))
         .with_state(pool)

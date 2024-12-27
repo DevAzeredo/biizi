@@ -34,6 +34,7 @@ pub struct NewEmployee {
 }
 
 #[derive(Deserialize, Serialize, Queryable, Selectable, Identifiable, AsChangeset)]
+#[diesel(primary_key(id))]
 #[diesel(table_name = companies)]
 pub struct Company {
     pub id: i64,
@@ -101,4 +102,22 @@ pub struct NewJobOpportunity {
     pub duration_in_hours: i32,
     pub pay_rate: f64,
     pub status: String,
+}
+
+#[derive(Serialize)]
+pub struct JobOpportunityWithCompany {
+    pub id: i64,
+    pub title: String,
+    pub description: String,
+    pub category: String,
+    pub address: String,
+    pub latitude: f64,
+    pub longitude: f64,
+    pub start_date_time: String,
+    pub duration_in_hours: i32,
+    pub pay_rate: f64,
+    pub status: String,
+    pub company_id: Option<i64>,
+    pub company_name: Option<String>,
+    pub company_logo_url: Option<String>
 }

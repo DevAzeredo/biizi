@@ -3,14 +3,21 @@ use diesel_async::{pooled_connection::AsyncDieselConnectionManager, AsyncPgConne
 
 use crate::{
     domain::models::{
-        Company, Employee, JobOpportunity, NewCompany, NewEmployee, NewJobOpportunity, NewUser,
-        User,
+        Company, Employee, JobOpportunity, JobOpportunityWithCompany, NewCompany, NewEmployee,
+        NewJobOpportunity, NewUser, User,
     },
     infrastructure::{auth::Auth, repositories::Repository},
 };
 
 pub struct Service;
 impl Service {
+    pub async fn get_job_opportunities_with_company(
+        conn: &mut AsyncPgConnection,
+        company_id: i64,
+    ) -> Result<Vec<JobOpportunityWithCompany>, diesel::result::Error> {
+        Ok(Repository::find_job_opportunities_with_company(conn, &company_id).await?)
+    }
+
     pub async fn find_by_login(
         conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
         user_login: &str,
@@ -24,21 +31,20 @@ impl Service {
     ) -> Result<Employee, diesel::result::Error> {
         Repository::find_employe(conn, employe_id).await
     }
-    
+
     pub async fn find_company(
         conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
-       company_id: &i64,
+        company_id: &i64,
     ) -> Result<Company, diesel::result::Error> {
         Repository::find_company(conn, company_id).await
     }
-
 
     pub async fn add_employee(
         conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
         employee: NewEmployee,
         user: User,
     ) -> Result<Json<Employee>, diesel::result::Error> {
-            Repository::save_employee(conn, &employee, &user).await
+        Repository::save_employee(conn, &employee, &user).await
     }
     pub async fn update_company_logo(
         conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
@@ -47,7 +53,6 @@ impl Service {
     ) -> Result<Json<Company>, diesel::result::Error> {
         Repository::update_company_logo(conn, &company_id, &logo_url).await
     }
-
 
     pub async fn add_company(
         conn: &mut bb8::PooledConnection<'_, AsyncDieselConnectionManager<AsyncPgConnection>>,
@@ -79,14 +84,14 @@ impl Service {
             Err(_) => {}
         }
 
-       let hashed_password = match Auth::hash_password(&new_user.password.clone()) {
+        let hashed_password = match Auth::hash_password(&new_user.password.clone()) {
             Ok(hashed_pass) => hashed_pass,
             Err(_) => return Err(diesel::result::Error::BrokenTransactionManager),
         };
 
-        let new_user_hashed = NewUser{
-            login : new_user.login.clone(),
-            password : hashed_password
+        let new_user_hashed = NewUser {
+            login: new_user.login.clone(),
+            password: hashed_password,
         };
 
         let user = Repository::save_user(conn, &new_user_hashed).await?;
