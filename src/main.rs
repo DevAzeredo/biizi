@@ -5,8 +5,9 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
+use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 
-use diesel_async::{pooled_connection::AsyncDieselConnectionManager, AsyncPgConnection};
+use diesel_async::{pooled_connection::AsyncDieselConnectionManager, AsyncPgConnection, AsyncConnection};
 use domain::models::{NewCompany, NewEmployee, NewJobOpportunity, NewUser, User};
 use infrastructure::auth::{self, Auth, SignInData};
 use std::{net::SocketAddr, path::PathBuf};
@@ -198,7 +199,7 @@ async fn upload_company_logo(
 
 pub async fn list_job_opportunities(
     State(pool): State<Pool>,
-    Path(company_id): Path<i64>,  
+    Path(company_id): Path<i64>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let mut conn = pool
         .get()
@@ -242,11 +243,18 @@ async fn create_job(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(res)
 }
-
 type Pool = bb8::Pool<AsyncDieselConnectionManager<AsyncPgConnection>>;
+pub const MIGRATIONS: diesel_async_migrations::EmbeddedMigrations = diesel_async_migrations::embed_migrations!();
+async fn run_migrations(url: impl AsRef<str>) -> anyhow::Result<()> {
+    let mut conn = AsyncPgConnection::establish(url.as_ref()).await?;
+    MIGRATIONS.run_pending_migrations(&mut conn).await?;
+    Ok(())
+}
+
 async fn create_router(ws_manager: WebSocketManager) -> Router {
     let ws_manager_clone = ws_manager.clone();
     let db_url = std::env::var("DATABASE_URL").unwrap();
+    run_migrations(db_url.clone()).await.unwrap();
     let config = AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(db_url);
     let pool = bb8::Pool::builder().build(config).await.unwrap();
 
@@ -342,6 +350,6 @@ async fn main() {
         app.await
             .into_make_service_with_connect_info::<SocketAddr>(),
     )
-    .await
-    .unwrap();
+        .await
+        .unwrap();
 }
